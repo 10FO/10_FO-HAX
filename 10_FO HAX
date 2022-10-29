@@ -1,0 +1,1726 @@
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+local Window = Library.CreateLib("10_F0 Haxs", "DarkTheme") 
+ 
+-- MAIN
+local Main = Window:NewTab("Main") 
+local MainSection = Main:NewSection("Local Player") 
+ 
+ 
+MainSection:NewButton("Better Chat Bypasser", "A Better and safer chat bypasser", function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/daddysyn/synergy/additional/betterbypasser",true))()   
+end) 
+ 
+MainSection:NewButton("Xray", "Good Xray", function()
+    assert(Drawing, 'exploit not supported')
+ 
+local UserInputService = game:GetService'UserInputService';
+local HttpService = game:GetService'HttpService';
+local GUIService = game:GetService'GuiService';
+local RunService = game:GetService'RunService';
+local Players = game:GetService'Players';
+local LocalPlayer = Players.LocalPlayer;
+local Camera = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse();
+local Menu = {};
+local MouseHeld = false;
+local LastRefresh = 0;
+local OptionsFile = '10_FO_ESP_SETTINGS.dat';
+local Binding = false;
+local BindedKey = nil;
+local OIndex = 0;
+local LineBox = {};
+local UIButtons = {};
+local Sliders = {};
+local Dragging = false;
+local DraggingUI = false;
+local DragOffset = Vector2.new();
+local DraggingWhat = nil;
+local OldData = {};
+local IgnoreList = {};
+local Red = Color3.new(1, 0, 0);
+local Green = Color3.new(0, 1, 0);
+local MenuLoaded = false;
+ 
+shared.MenuDrawingData = shared.MenuDrawingData or { Instances = {} };
+shared.PlayerData = shared.PlayerData or {};
+shared.RSName = shared.RSName or ('UnnamedESP_by_10_FO-' .. HttpService:GenerateGUID(false));
+ 
+local GetDataName = shared.RSName .. '-GetData';
+local UpdateName = shared.RSName .. '-Update';
+ 
+local Debounce = setmetatable({}, {
+__index = function(t, i)
+return rawget(t, i) or false
+end;
+});
+ 
+pcall(function() shared.InputBeganCon:disconnect() end);
+pcall(function() shared.InputEndedCon:disconnect() end);
+ 
+function GetMouseLocation()
+return UserInputService:GetMouseLocation();
+end
+ 
+function MouseHoveringOver(Values)
+local X1, Y1, X2, Y2 = Values[1], Values[2], Values[3], Values[4]
+local MLocation = GetMouseLocation();
+return (MLocation.x >= X1 and MLocation.x <= (X1 + (X2 - X1))) and (MLocation.y >= Y1 and MLocation.y <= (Y1 + (Y2 - Y1)));
+end
+ 
+function GetTableData(t) -- basically table.foreach i dont even know why i made this
+if typeof(t) ~= 'table' then return end
+return setmetatable(t, {
+__call = function(t, func)
+if typeof(func) ~= 'function' then return end;
+for i, v in pairs(t) do
+pcall(func, i, v);
+end
+end;
+});
+end
+local function Format(format, ...)
+return string.format(format, ...);
+end
+function CalculateValue(Min, Max, Percent)
+return Min + math.floor(((Max - Min) * Percent) + .5);
+end
+ 
+local Options = setmetatable({}, {
+__call = function(t, ...)
+local Arguments = {...};
+local Name = Arguments[1];
+OIndex = OIndex + 1; -- (typeof(Arguments[3]) == 'boolean' and 1 or 0);
+rawset(t, Name, setmetatable({
+Name = Arguments[1];
+Text = Arguments[2];
+Value = Arguments[3];
+DefaultValue = Arguments[3];
+AllArgs = Arguments;
+Index = OIndex;
+}, {
+__call = function(t, v)
+if typeof(t.Value) == 'function' then
+t.Value();
+elseif typeof(t.Value) == 'EnumItem' then
+local BT = Menu:GetInstance(Format('%s_BindText', t.Name));
+Binding = true;
+local Val = 0
+while Binding do
+wait();
+Val = (Val + 1) % 17;
+BT.Text = Val <= 8 and '|' or '';
+end
+t.Value = BindedKey;
+BT.Text = tostring(t.Value):match'%w+%.%w+%.(.+)';
+BT.Position = t.BasePosition + Vector2.new(t.BaseSize.X - BT.TextBounds.X - 20, -10);
+else
+local NewValue = v;
+if NewValue == nil then NewValue = not t.Value; end
+rawset(t, 'Value', NewValue);
+if Arguments[2] ~= nil then
+if typeof(Arguments[3]) == 'number' then
+local AMT = Menu:GetInstance(Format('%s_AmountText', t.Name));
+AMT.Text = tostring(t.Value);
+AMT.Position = t.BasePosition + Vector2.new(t.BaseSize.X - AMT.TextBounds.X - 10, -10);
+else
+local Inner = Menu:GetInstance(Format('%s_InnerCircle', t.Name));
+Inner.Visible = t.Value;
+end
+end
+end
+end;
+}));
+end;
+})
+ 
+function Load()
+local _, Result = pcall(readfile, OptionsFile);
+if _ then -- extremely ugly code yea i know but i dont care p.s. i hate pcall
+local _, Table = pcall(HttpService.JSONDecode, HttpService, Result);
+if _ then
+for i, v in pairs(Table) do
+if Options[i] ~= nil and Options[i].Value ~= nil and (typeof(Options[i].Value) == 'boolean' or typeof(Options[i].Value) == 'number') then
+Options[i].Value = v.Value;
+pcall(Options[i], v.Value);
+end
+end
+end
+end
+end
+ 
+Options('Enabled', 'ESP Enabled', true);
+Options('ShowTeam', 'Show Team', false);
+Options('ShowName', 'Show Names', true);
+Options('ShowDistance', 'Show Distance', true);
+Options('ShowHealth', 'Show Health', true);
+Options('ShowBoxes', 'Show Boxes', true);
+Options('ShowTracers', 'Show Tracers', true);
+Options('ShowDot', 'Show Head Dot', false);
+Options('VisCheck', 'Visibility Check', false);
+Options('Crosshair', 'Crosshair', false);
+Options('TextOutline', 'Text Outline', true);
+Options('TextSize', 'Text Size', syn and 18 or 14, 10, 24); -- cuz synapse fonts look weird???
+Options('MaxDistance', 'Max Distance', 2500, 100, 5000);
+Options('RefreshRate', 'Refresh Rate (ms)', 5, 1, 200);
+Options('MenuKey', 'Menu Key', Enum.KeyCode.F4, 1);
+Options('ResetSettings', 'Reset Settings', function()
+for i, v in pairs(Options) do
+if Options[i] ~= nil and Options[i].Value ~= nil and Options[i].Text ~= nil and (typeof(Options[i].Value) == 'boolean' or typeof(Options[i].Value) == 'number') then
+Options[i](Options[i].DefaultValue);
+end
+end
+end, 4);
+Options('LoadSettings', 'Load Settings', Load, 3);
+Options('SaveSettings', 'Save Settings', function()
+writefile(OptionsFile, HttpService:JSONEncode(Options));
+end, 2)
+-- Options.SaveSettings.Value();
+ 
+Load();
+ 
+Options('MenuOpen', nil, true);
+ 
+local function Set(t, i, v)
+t[i] = v;
+end
+local function Combine(...)
+local Output = {};
+for i, v in pairs{...} do
+if typeof(v) == 'table' then
+table.foreach(v, function(i, v)
+Output[i] = v;
+end)
+end
+end
+return Output
+end
+function IsStringEmpty(String)
+if type(String) == 'string' then
+return String:match'^%s+$' ~= nil or #String == 0 or String == '' or false;
+end
+return false
+end
+ 
+function NewDrawing(InstanceName)
+local Instance = Drawing.new(InstanceName);
+return (function(Properties)
+for i, v in pairs(Properties) do
+pcall(Set, Instance, i, v);
+end
+return Instance;
+end)
+end
+ 
+function Menu:AddMenuInstace(Name, Instance)
+if shared.MenuDrawingData.Instances[Name] ~= nil then
+shared.MenuDrawingData.Instances[Name]:Remove();
+end
+shared.MenuDrawingData.Instances[Name] = Instance;
+return Instance;
+end
+function Menu:UpdateMenuInstance(Name)
+local Instance = shared.MenuDrawingData.Instances[Name];
+if Instance ~= nil then
+return (function(Properties)
+for i, v in pairs(Properties) do
+-- print(Format('%s %s -> %s', Name, tostring(i), tostring(v)));
+pcall(Set, Instance, i, v);
+end
+return Instance;
+end)
+end
+end
+function Menu:GetInstance(Name)
+return shared.MenuDrawingData.Instances[Name];
+end
+ 
+function LineBox:Create(Properties)
+local Box = { Visible = true }; -- prevent errors not really though dont worry bout the Visible = true thing
+ 
+local Properties = Combine({
+Transparency = 1;
+Thickness = 1;
+Visible = true;
+}, Properties);
+ 
+Box['TopLeft'] = NewDrawing'Line'(Properties);
+Box['TopRight'] = NewDrawing'Line'(Properties);
+Box['BottomLeft'] = NewDrawing'Line'(Properties);
+Box['BottomRight'] = NewDrawing'Line'(Properties);
+ 
+function Box:Update(CF, Size, Color, Properties)
+if not CF or not Size then return end
+ 
+local TLPos, Visible1 = Camera:WorldToViewportPoint((CF * CFrame.new( Size.X,  Size.Y, 0)).p);
+local TRPos, Visible2 = Camera:WorldToViewportPoint((CF * CFrame.new(-Size.X,  Size.Y, 0)).p);
+local BLPos, Visible3 = Camera:WorldToViewportPoint((CF * CFrame.new( Size.X, -Size.Y, 0)).p);
+local BRPos, Visible4 = Camera:WorldToViewportPoint((CF * CFrame.new(-Size.X, -Size.Y, 0)).p);
+-- ## BEGIN UGLY CODE
+if Visible1 then
+Box['TopLeft'].Visible = true;
+Box['TopLeft'].Color = Color;
+Box['TopLeft'].From = Vector2.new(TLPos.X, TLPos.Y);
+Box['TopLeft'].To = Vector2.new(TRPos.X, TRPos.Y);
+else
+Box['TopLeft'].Visible = false;
+end
+if Visible2 then
+Box['TopRight'].Visible = true;
+Box['TopRight'].Color = Color;
+Box['TopRight'].From = Vector2.new(TRPos.X, TRPos.Y);
+Box['TopRight'].To = Vector2.new(BRPos.X, BRPos.Y);
+else
+Box['TopRight'].Visible = false;
+end
+if Visible3 then
+Box['BottomLeft'].Visible = true;
+Box['BottomLeft'].Color = Color;
+Box['BottomLeft'].From = Vector2.new(BLPos.X, BLPos.Y);
+Box['BottomLeft'].To = Vector2.new(TLPos.X, TLPos.Y);
+else
+Box['BottomLeft'].Visible = false;
+end
+if Visible4 then
+Box['BottomRight'].Visible = true;
+Box['BottomRight'].Color = Color;
+Box['BottomRight'].From = Vector2.new(BRPos.X, BRPos.Y);
+Box['BottomRight'].To = Vector2.new(BLPos.X, BLPos.Y);
+else
+Box['BottomRight'].Visible = false;
+end
+-- ## END UGLY CODE
+if Properties then
+GetTableData(Properties)(function(i, v)
+pcall(Set, Box['TopLeft'], i, v);
+pcall(Set, Box['TopRight'], i, v);
+pcall(Set, Box['BottomLeft'], i, v);
+pcall(Set, Box['BottomRight'], i, v);
+end)
+end
+end
+function Box:SetVisible(bool)
+pcall(Set, Box['TopLeft'], 'Visible', bool);
+pcall(Set, Box['TopRight'], 'Visible', bool);
+pcall(Set, Box['BottomLeft'], 'Visible', bool);
+pcall(Set, Box['BottomRight'], 'Visible', bool);
+end
+function Box:Remove()
+self:SetVisible(false);
+Box['TopLeft']:Remove();
+Box['TopRight']:Remove();
+Box['BottomLeft']:Remove();
+Box['BottomRight']:Remove();
+end
+ 
+return Box;
+end
+ 
+function CreateMenu(NewPosition) -- Create Menu
+local function FromHex(HEX)
+HEX = HEX:gsub('#', '');
+return Color3.fromRGB(tonumber('0x' .. HEX:sub(1, 2)), tonumber('0x' .. HEX:sub(3, 4)), tonumber('0x' .. HEX:sub(5, 6)));
+end
+ 
+local Colors = {
+Primary = {
+Main = FromHex'424242';
+Light = FromHex'6d6d6d';
+Dark = FromHex'1b1b1b';
+};
+Secondary = {
+Main = FromHex'e0e0e0';
+Light = FromHex'ffffff';
+Dark = FromHex'aeaeae';
+};
+};
+ 
+MenuLoaded = false;
+ 
+GetTableData(UIButtons)(function(i, v)
+v.Instance.Visible = false;
+v.Instance:Remove();
+end)
+GetTableData(Sliders)(function(i, v)
+v.Instance.Visible = false;
+v.Instance:Remove();
+end)
+ 
+UIButtons = {};
+Sliders = {};
+ 
+local BaseSize = Vector2.new(300, 580);
+local BasePosition = NewPosition or Vector2.new(Camera.ViewportSize.X / 8 - (BaseSize.X / 2), Camera.ViewportSize.Y / 2 - (BaseSize.Y / 2));
+ 
+Menu:AddMenuInstace('CrosshairX', NewDrawing'Line'{
+Visible = false;
+Color = Color3.new(0, 1, 0);
+Transparency = 1;
+Thickness = 1;
+});
+Menu:AddMenuInstace('CrosshairY', NewDrawing'Line'{
+Visible = false;
+Color = Color3.new(0, 1, 0);
+Transparency = 1;
+Thickness = 1;
+});
+ 
+delay(.025, function() -- since zindex doesnt exist
+Menu:AddMenuInstace('Main', NewDrawing'Square'{
+Size = BaseSize;
+Position = BasePosition;
+Filled = false;
+Color = Colors.Primary.Main;
+Thickness = 3;
+Visible = true;
+});
+end);
+Menu:AddMenuInstace('TopBar', NewDrawing'Square'{
+Position = BasePosition;
+Size = Vector2.new(BaseSize.X, 25);
+Color = Colors.Primary.Dark;
+Filled = true;
+Visible = true;
+});
+Menu:AddMenuInstace('TopBarTwo', NewDrawing'Square'{
+Position = BasePosition + Vector2.new(0, 25);
+Size = Vector2.new(BaseSize.X, 60);
+Color = Colors.Primary.Main;
+Filled = true;
+Visible = true;
+});
+Menu:AddMenuInstace('TopBarText', NewDrawing'Text'{
+Size = 25;
+Position = shared.MenuDrawingData.Instances.TopBarTwo.Position + Vector2.new(25, 15);
+Text = 'Unnamed ESP';
+Color = Colors.Secondary.Light;
+Visible = true;
+});
+Menu:AddMenuInstace('TopBarTextBR', NewDrawing'Text'{
+Size = 15;
+Position = shared.MenuDrawingData.Instances.TopBarTwo.Position + Vector2.new(BaseSize.X - 65, 40);
+Text = 'by 10_FO';
+Color = Colors.Secondary.Dark;
+Visible = true;
+});
+Menu:AddMenuInstace('Filling', NewDrawing'Square'{
+Size = BaseSize - Vector2.new(0, 85);
+Position = BasePosition + Vector2.new(0, 85);
+Filled = true;
+Color = Colors.Secondary.Main;
+Transparency= .5;
+Visible = true;
+});
+ 
+local CPos = 0;
+ 
+GetTableData(Options)(function(i, v)
+if typeof(v.Value) == 'boolean' and not IsStringEmpty(v.Text) and v.Text ~= nil then
+CPos = CPos + 25;
+local BaseSize = Vector2.new(BaseSize.X, 30);
+local BasePosition = shared.MenuDrawingData.Instances.Filling.Position + Vector2.new(30, v.Index * 25 - 10);
+UIButtons[#UIButtons + 1] = {
+Option = v;
+Instance = Menu:AddMenuInstace(Format('%s_Hitbox', v.Name), NewDrawing'Square'{
+Position = BasePosition - Vector2.new(30, 15);
+Size = BaseSize;
+Visible = false;
+});
+};
+Menu:AddMenuInstace(Format('%s_OuterCircle', v.Name), NewDrawing'Circle'{
+Radius = 10;
+Position = BasePosition;
+Color = Colors.Secondary.Light;
+Filled = true;
+Visible = true;
+});
+Menu:AddMenuInstace(Format('%s_InnerCircle', v.Name), NewDrawing'Circle'{
+Radius = 7;
+Position = BasePosition;
+Color = Colors.Secondary.Dark;
+Filled = true;
+Visible = v.Value;
+});
+Menu:AddMenuInstace(Format('%s_Text', v.Name), NewDrawing'Text'{
+Text = v.Text;
+Size = 20;
+Position = BasePosition + Vector2.new(20, -10);
+Visible = true;
+Color = Colors.Primary.Dark;
+});
+end
+end)
+GetTableData(Options)(function(i, v) -- just to make sure certain things are drawn before or after others, too lazy to actually sort table
+if typeof(v.Value) == 'number' then
+CPos = CPos + 25;
+ 
+local BaseSize = Vector2.new(BaseSize.X, 30);
+local BasePosition = shared.MenuDrawingData.Instances.Filling.Position + Vector2.new(0, CPos - 10);
+ 
+local Text = Menu:AddMenuInstace(Format('%s_Text', v.Name), NewDrawing'Text'{
+Text = v.Text;
+Size = 20;
+Position = BasePosition + Vector2.new(20, -10);
+Visible = true;
+Color = Colors.Primary.Dark;
+});
+local AMT = Menu:AddMenuInstace(Format('%s_AmountText', v.Name), NewDrawing'Text'{
+Text = tostring(v.Value);
+Size = 20;
+Position = BasePosition;
+Visible = true;
+Color = Colors.Primary.Dark;
+});
+local Line = Menu:AddMenuInstace(Format('%s_SliderLine', v.Name), NewDrawing'Line'{
+Transparency = 1;
+Color = Colors.Primary.Dark;
+Thickness = 3;
+Visible = true;
+From = BasePosition + Vector2.new(20, 20);
+To = BasePosition + Vector2.new(BaseSize.X - 10, 20);
+});
+CPos = CPos + 10;
+local Slider = Menu:AddMenuInstace(Format('%s_Slider', v.Name), NewDrawing'Circle'{
+Visible = true;
+Filled = true;
+Radius = 6;
+Color = Colors.Secondary.Dark;
+Position = BasePosition + Vector2.new(35, 20);
+})
+ 
+local CSlider = {Slider = Slider; Line = Line; Min = v.AllArgs[4]; Max = v.AllArgs[5]; Option = v};
+Sliders[#Sliders + 1] = CSlider;
+ 
+-- local Percent = (v.Value / CSlider.Max) * 100;
+-- local Size = math.abs(Line.From.X - Line.To.X);
+-- local Value = Size * (Percent / 100); -- this shit's inaccurate but fuck it i'm not even gonna bother fixing it
+ 
+Slider.Position = BasePosition + Vector2.new(40, 20);
+ 
+v.BaseSize = BaseSize;
+v.BasePosition = BasePosition;
+AMT.Position = BasePosition + Vector2.new(BaseSize.X - AMT.TextBounds.X - 10, -10)
+end
+end)
+GetTableData(Options)(function(i, v) -- just to make sure certain things are drawn before or after others, too lazy to actually sort table
+if typeof(v.Value) == 'EnumItem' then
+CPos = CPos + 30;
+ 
+local BaseSize = Vector2.new(BaseSize.X, 30);
+local BasePosition = shared.MenuDrawingData.Instances.Filling.Position + Vector2.new(0, CPos - 10);
+ 
+UIButtons[#UIButtons + 1] = {
+Option = v;
+Instance = Menu:AddMenuInstace(Format('%s_Hitbox', v.Name), NewDrawing'Square'{
+Size = Vector2.new(BaseSize.X, 20) - Vector2.new(30, 0);
+Visible = true;
+Transparency= .5;
+Position = BasePosition + Vector2.new(15, -10);
+Color = Colors.Secondary.Light;
+Filled = true;
+});
+};
+local Text = Menu:AddMenuInstace(Format('%s_Text', v.Name), NewDrawing'Text'{
+Text = v.Text;
+Size = 20;
+Position = BasePosition + Vector2.new(20, -10);
+Visible = true;
+Color = Colors.Primary.Dark;
+});
+local BindText = Menu:AddMenuInstace(Format('%s_BindText', v.Name), NewDrawing'Text'{
+Text = tostring(v.Value):match'%w+%.%w+%.(.+)';
+Size = 20;
+Position = BasePosition;
+Visible = true;
+Color = Colors.Primary.Dark;
+});
+ 
+Options[i].BaseSize = BaseSize;
+Options[i].BasePosition = BasePosition;
+BindText.Position = BasePosition + Vector2.new(BaseSize.X - BindText.TextBounds.X - 20, -10);
+end
+end)
+GetTableData(Options)(function(i, v) -- just to make sure certain things are drawn before or after others, too lazy to actually sort table
+if typeof(v.Value) == 'function' then
+local BaseSize = Vector2.new(BaseSize.X, 30);
+local BasePosition = shared.MenuDrawingData.Instances.Filling.Position + Vector2.new(0, CPos + (25 * v.AllArgs[4]) - 35);
+ 
+UIButtons[#UIButtons + 1] = {
+Option = v;
+Instance = Menu:AddMenuInstace(Format('%s_Hitbox', v.Name), NewDrawing'Square'{
+Size = Vector2.new(BaseSize.X, 20) - Vector2.new(30, 0);
+Visible = true;
+Transparency= .5;
+Position = BasePosition + Vector2.new(15, -10);
+Color = Colors.Secondary.Light;
+Filled = true;
+});
+};
+local Text = Menu:AddMenuInstace(Format('%s_Text', v.Name), NewDrawing'Text'{
+Text = v.Text;
+Size = 20;
+Position = BasePosition + Vector2.new(20, -10);
+Visible = true;
+Color = Colors.Primary.Dark;
+});
+ 
+-- BindText.Position = BasePosition + Vector2.new(BaseSize.X - BindText.TextBounds.X - 10, -10);
+end
+end)
+ 
+delay(.1, function()
+MenuLoaded = true;
+end);
+ 
+-- this has to be at the bottom cuz proto drawing api doesnt have zindex :triumph:
+Menu:AddMenuInstace('Cursor1', NewDrawing'Line'{
+Visible = false;
+Color = Color3.new(1, 0, 0);
+Transparency = 1;
+Thickness = 2;
+});
+Menu:AddMenuInstace('Cursor2', NewDrawing'Line'{
+Visible = false;
+Color = Color3.new(1, 0, 0);
+Transparency = 1;
+Thickness = 2;
+});
+Menu:AddMenuInstace('Cursor3', NewDrawing'Line'{
+Visible = false;
+Color = Color3.new(1, 0, 0);
+Transparency = 1;
+Thickness = 2;
+});
+end
+ 
+CreateMenu();
+ 
+shared.InputBeganCon = UserInputService.InputBegan:connect(function(input)
+if input.UserInputType.Name == 'MouseButton1' and Options.MenuOpen.Value then
+MouseHeld = true;
+local Bar = Menu:GetInstance'TopBar';
+local Values = {
+Bar.Position.X;
+Bar.Position.Y;
+Bar.Position.X + Bar.Size.X;
+Bar.Position.Y + Bar.Size.Y;
+}
+if MouseHoveringOver(Values) and not syn then -- disable dragging for synapse cuz idk why it breaks
+DraggingUI = false; -- also breaks for other exploits
+DragOffset = Menu:GetInstance'Main'.Position - GetMouseLocation();
+else
+for i, v in pairs(Sliders) do
+local Values = {
+v.Line.From.X - (v.Slider.Radius);
+v.Line.From.Y - (v.Slider.Radius);
+v.Line.To.X + (v.Slider.Radius);
+v.Line.To.Y + (v.Slider.Radius);
+};
+if MouseHoveringOver(Values) then
+DraggingWhat = v;
+Dragging = true;
+break
+end
+end
+end
+end
+end)
+shared.InputEndedCon = UserInputService.InputEnded:connect(function(input)
+if input.UserInputType.Name == 'MouseButton1' and Options.MenuOpen.Value then
+MouseHeld = false;
+for i, v in pairs(UIButtons) do
+local Values = {
+v.Instance.Position.X;
+v.Instance.Position.Y;
+v.Instance.Position.X + v.Instance.Size.X;
+v.Instance.Position.Y + v.Instance.Size.Y;
+};
+if MouseHoveringOver(Values) then
+v.Option();
+break -- prevent clicking 2 options
+end
+end
+elseif input.UserInputType.Name == 'Keyboard' then
+if Binding then
+BindedKey = input.KeyCode;
+Binding = false;
+elseif input.KeyCode == Options.MenuKey.Value or (input.KeyCode == Enum.KeyCode.Home and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl)) then
+Options.MenuOpen();
+end
+end
+end)
+ 
+function ToggleMenu()
+if Options.MenuOpen.Value then
+GetTableData(shared.MenuDrawingData.Instances)(function(i, v)
+if OldData[v] then
+pcall(Set, v, 'Visible', true);
+end
+end)
+else
+-- GUIService:SetMenuIsOpen(false);
+GetTableData(shared.MenuDrawingData.Instances)(function(i, v)
+if v.Visible == true then
+OldData[v] = true;
+pcall(Set, v, 'Visible', false);
+end
+end)
+end
+end
+ 
+function CheckRay(Player, Distance, Position, Unit)
+local Pass = true;
+ 
+if Distance > 999 then return false; end
+ 
+local _Ray = Ray.new(Position, Unit * Distance);
+ 
+local List = {LocalPlayer.Character, Camera, Mouse.TargetFilter};
+ 
+for i,v in pairs(IgnoreList) do table.insert(List, v); end;
+ 
+local Hit = workspace:FindPartOnRayWithIgnoreList(_Ray, List);
+if Hit and not Hit:IsDescendantOf(Player.Character) then
+Pass = false;
+if Hit.Transparency >= .3 or not Hit.CanCollide and Hit.ClassName ~= Terrain then -- Detect invisible walls
+IgnoreList[#IgnoreList + 1] = Hit;
+end
+end
+ 
+return Pass;
+end
+ 
+function CheckPlayer(Player)
+if not Options.Enabled.Value then return false end
+ 
+local Pass = true;
+local Distance = 0;
+ 
+if Player ~= LocalPlayer and Player.Character then
+if not Options.ShowTeam.Value and Player.TeamColor == LocalPlayer.TeamColor then
+Pass = false;
+end
+ 
+local Head = Player.Character:FindFirstChild'Head';
+ 
+if Pass and Player.Character and Head then
+Distance = (Camera.CFrame.p - Head.Position).magnitude;
+if Options.VisCheck.Value then
+Pass = CheckRay(Player, Distance, Camera.CFrame.p, (Head.Position - Camera.CFrame.p).unit);
+end
+if Distance > Options.MaxDistance.Value then
+Pass = false;
+end
+end
+else
+Pass = false;
+end
+ 
+return Pass, Distance;
+end
+ 
+function UpdatePlayerData()
+if (tick() - LastRefresh) > (Options.RefreshRate.Value / 1000) then
+LastRefresh = tick();
+for i, v in pairs(Players:GetPlayers()) do
+local Data = shared.PlayerData[v.Name] or { Instances = {} };
+ 
+Data.Instances['Box'] = Data.Instances['Box'] or LineBox:Create{Thickness = 3};
+Data.Instances['Tracer'] = Data.Instances['Tracer'] or NewDrawing'Line'{
+Transparency = 1;
+Thickness = 2;
+}
+Data.Instances['HeadDot'] = Data.Instances['HeadDot'] or NewDrawing'Circle'{
+Filled = true;
+NumSides = 30;
+}
+Data.Instances['NameTag'] = Data.Instances['NameTag'] or NewDrawing'Text'{
+Size = Options.TextSize.Value;
+Center = true;
+Outline = Options.TextOutline.Value;
+Visible = true;
+};
+Data.Instances['DistanceHealthTag'] = Data.Instances['DistanceHealthTag'] or NewDrawing'Text'{
+Size = Options.TextSize.Value - 1;
+Center = true;
+Outline = Options.TextOutline.Value;
+Visible = true;
+};
+ 
+local NameTag = Data.Instances['NameTag'];
+local DistanceTag = Data.Instances['DistanceHealthTag'];
+local Tracer = Data.Instances['Tracer'];
+local HeadDot = Data.Instances['HeadDot'];
+local Box = Data.Instances['Box'];
+ 
+local Pass, Distance = CheckPlayer(v);
+ 
+if Pass and v.Character then
+Data.LastUpdate = tick();
+local Humanoid = v.Character:FindFirstChildOfClass'Humanoid';
+local Head = v.Character:FindFirstChild'Head';
+local HumanoidRootPart = v.Character:FindFirstChild'HumanoidRootPart';
+if v.Character ~= nil and Head then
+local ScreenPosition, Vis = Camera:WorldToViewportPoint(Head.Position);
+if Vis then
+local Color = v.TeamColor == LocalPlayer.TeamColor and Green or Red;
+ 
+local ScreenPositionUpper = Camera:WorldToViewportPoint(Head.CFrame * CFrame.new(0, Head.Size.Y, 0).p);
+local Scale = Head.Size.Y / 2;
+ 
+if Options.ShowName.Value then
+NameTag.Visible = true;
+NameTag.Text = v.Name;
+NameTag.Size = Options.TextSize.Value;
+NameTag.Outline = Options.TextOutline.Value;
+NameTag.Position = Vector2.new(ScreenPositionUpper.X, ScreenPositionUpper.Y);
+NameTag.Color = Color;
+if Drawing.Fonts then -- CURRENTLY SYNAPSE ONLY :MEGAHOLY:
+NameTag.Font = Drawing.Fonts.UI;
+end
+else
+NameTag.Visible = false;
+end
+if Options.ShowDistance.Value or Options.ShowHealth.Value then
+DistanceTag.Visible = true;
+DistanceTag.Size = Options.TextSize.Value - 1;
+DistanceTag.Outline = Options.TextOutline.Value;
+DistanceTag.Color = Color3.new(1, 1, 1);
+if Drawing.Fonts then -- CURRENTLY SYNAPSE ONLY :MEGAHOLY:
+NameTag.Font = Drawing.Fonts.UI;
+end
+ 
+local Str = '';
+ 
+if Options.ShowDistance.Value then
+Str = Str .. Format('[%d] ', Distance);
+end
+if Options.ShowHealth.Value and Humanoid then
+Str = Str .. Format('[%d/100]', Humanoid.Health / Humanoid.MaxHealth * 100);
+end
+ 
+DistanceTag.Text = Str;
+DistanceTag.Position = Vector2.new(ScreenPositionUpper.X, ScreenPositionUpper.Y) + Vector2.new(0, NameTag.Size);
+else
+DistanceTag.Visible = false;
+end
+if Options.ShowDot.Value then
+local Top = Camera:WorldToViewportPoint((Head.CFrame * CFrame.new(0, Scale, 0)).p);
+local Bottom = Camera:WorldToViewportPoint((Head.CFrame * CFrame.new(0, -Scale, 0)).p);
+local Radius = (Top - Bottom).y;
+ 
+HeadDot.Visible = true;
+HeadDot.Color = Color;
+HeadDot.Position = Vector2.new(ScreenPosition.X, ScreenPosition.Y);
+HeadDot.Radius = Radius;
+else
+HeadDot.Visible = false;
+end
+if Options.ShowTracers.Value then
+Tracer.Visible = true;
+Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y);
+Tracer.To = Vector2.new(ScreenPosition.X, ScreenPosition.Y);
+Tracer.Color = Color;
+else
+Tracer.Visible = false;
+end
+if Options.ShowBoxes.Value and HumanoidRootPart then
+Box:Update(HumanoidRootPart.CFrame, Vector3.new(2, 3, 0) * (Scale * 2), Color);
+else
+Box:SetVisible(false);
+end
+else
+NameTag.Visible = false;
+DistanceTag.Visible = false;
+Tracer.Visible = false;
+HeadDot.Visible = false;
+ 
+Box:SetVisible(false);
+end
+end
+else
+NameTag.Visible = false;
+DistanceTag.Visible = false;
+Tracer.Visible = false;
+HeadDot.Visible = false;
+ 
+Box:SetVisible(false);
+end
+ 
+shared.PlayerData[v.Name] = Data;
+end
+end
+end
+ 
+function Update()
+for i, v in pairs(shared.PlayerData) do
+if not Players:FindFirstChild(tostring(i)) then
+GetTableData(v.Instances)(function(i, obj)
+obj.Visible = false;
+obj:Remove();
+v.Instances[i] = nil;
+end)
+shared.PlayerData[i] = nil;
+end
+end
+ 
+local CX = Menu:GetInstance'CrosshairX';
+local CY = Menu:GetInstance'CrosshairY';
+if Options.Crosshair.Value then
+CX.Visible = true;
+CY.Visible = true;
+ 
+CX.To = Vector2.new((Camera.ViewportSize.X / 2) - 8, (Camera.ViewportSize.Y / 2));
+CX.From = Vector2.new((Camera.ViewportSize.X / 2) + 8, (Camera.ViewportSize.Y / 2));
+CY.To = Vector2.new((Camera.ViewportSize.X / 2), (Camera.ViewportSize.Y / 2) - 8);
+CY.From = Vector2.new((Camera.ViewportSize.X / 2), (Camera.ViewportSize.Y / 2) + 8);
+else
+CX.Visible = false;
+CY.Visible = false;
+end
+ 
+if Options.MenuOpen.Value and MenuLoaded then
+local MLocation = GetMouseLocation();
+shared.MenuDrawingData.Instances.Main.Color = Color3.fromHSV(tick() * 24 % 255/255, 1, 1);
+local MainInstance = Menu:GetInstance'Main';
+local Values = {
+MainInstance.Position.X;
+MainInstance.Position.Y;
+MainInstance.Position.X + MainInstance.Size.X;
+MainInstance.Position.Y + MainInstance.Size.Y;
+};
+if MainInstance and MouseHoveringOver(Values) then
+Debounce.CursorVis = true;
+-- GUIService:SetMenuIsOpen(true);
+Menu:UpdateMenuInstance'Cursor1'{
+Visible = true;
+From = Vector2.new(MLocation.x, MLocation.y);
+To = Vector2.new(MLocation.x + 5, MLocation.y + 6);
+}
+Menu:UpdateMenuInstance'Cursor2'{
+Visible = true;
+From = Vector2.new(MLocation.x, MLocation.y);
+To = Vector2.new(MLocation.x, MLocation.y + 8);
+}
+Menu:UpdateMenuInstance'Cursor3'{
+Visible = true;
+From = Vector2.new(MLocation.x, MLocation.y + 6);
+To = Vector2.new(MLocation.x + 5, MLocation.y + 5);
+}
+else
+if Debounce.CursorVis then
+Debounce.CursorVis = false;
+-- GUIService:SetMenuIsOpen(false);
+Menu:UpdateMenuInstance'Cursor1'{Visible = false};
+Menu:UpdateMenuInstance'Cursor2'{Visible = false};
+Menu:UpdateMenuInstance'Cursor3'{Visible = false};
+end
+end
+if MouseHeld then
+if Dragging then
+DraggingWhat.Slider.Position = Vector2.new(math.clamp(MLocation.X, DraggingWhat.Line.From.X, DraggingWhat.Line.To.X), DraggingWhat.Slider.Position.Y);
+local Percent = (DraggingWhat.Slider.Position.X - DraggingWhat.Line.From.X) / ((DraggingWhat.Line.To.X - DraggingWhat.Line.From.X));
+local Value = CalculateValue(DraggingWhat.Min, DraggingWhat.Max, Percent);
+DraggingWhat.Option(Value);
+elseif DraggingUI then
+Debounce.UIDrag = true;
+local Main = Menu:GetInstance'Main';
+local MousePos = GetMouseLocation();
+Main.Position = MousePos + DragOffset;
+end
+else
+Dragging = false;
+if DraggingUI and Debounce.UIDrag then
+Debounce.UIDrag = false;
+DraggingUI = false;
+CreateMenu(Menu:GetInstance'Main'.Position);
+end
+end
+if not Debounce.Menu then
+Debounce.Menu = true;
+ToggleMenu();
+end
+elseif Debounce.Menu and not Options.MenuOpen.Value then
+Debounce.Menu = false;
+ToggleMenu();
+end
+end
+ 
+RunService:UnbindFromRenderStep(GetDataName);
+RunService:UnbindFromRenderStep(UpdateName);
+ 
+RunService:BindToRenderStep(GetDataName, 1, UpdatePlayerData);
+RunService:BindToRenderStep(UpdateName, 1, Update);
+end) 
+ 
+ 
+MainSection:NewToggle("Speed", "Will not work in every game", function(state)
+    if state then
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 120
+        game.Players.LocalPlayer.Character.Humanoid.JumpPower = 120
+ 
+    else
+        game.Players.LocalPlayer.Character.Humanoid.JumpPower = 50
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
+    end
+end) 
+ 
+ 
+-- LOCAL PLAYER 
+local Player = Window:NewTab("Player") 
+local PlayerSection = Player:NewSection("Player") 
+ 
+PlayerSection:NewSlider("WalkSpeed", "Custom Walk Speed", 500, 16, function(s) -- 500 (MaxValue) | 0 (MinValue)
+    game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = s
+end) 
+ 
+PlayerSection:NewButton("Chat Spoofer", "Troll friends", function()
+    loadstring(game:HttpGet(('https://pastebin.com/raw/djBfk8Li'),true))()
+end)
+ 
+PlayerSection:NewButton("No Clip ", "Walk threw walls 🙂", function()
+    local Workspace = game:GetService("Workspace")
+    local CoreGui = game:GetService("CoreGui")
+    local Players = game:GetService("Players")
+    local Noclip = Instance.new("ScreenGui")
+    local BG = Instance.new("Frame")
+    local Title = Instance.new("TextLabel")
+    local Toggle = Instance.new("TextButton")
+    local StatusPF = Instance.new("TextLabel")
+    local Status = Instance.new("TextLabel")
+    local Credit = Instance.new("TextLabel")
+    local Plr = Players.LocalPlayer
+    local Clipon = false
+ 
+    Noclip.Name = "Noclip"
+    Noclip.Parent = game.CoreGui
+ 
+    BG.Name = "BG"
+    BG.Parent = Noclip
+    BG.BackgroundColor3 = Color3.new(0.0980392, 0.0980392, 0.0980392)
+    BG.BorderColor3 = Color3.new(0.0588235, 0.0588235, 0.0588235)
+    BG.BorderSizePixel = 2
+    BG.Position = UDim2.new(0.149479166, 0, 0.82087779, 0)
+    BG.Size = UDim2.new(0, 210, 0, 127)
+    BG.Active = true
+    BG.Draggable = true
+ 
+    Title.Name = "Title"
+    Title.Parent = BG
+    Title.BackgroundColor3 = Color3.new(0.266667, 0.00392157, 0.627451)
+    Title.BorderColor3 = Color3.new(0.180392, 0, 0.431373)
+    Title.BorderSizePixel = 2
+    Title.Size = UDim2.new(0, 210, 0, 33)
+    Title.Font = Enum.Font.Highway
+    Title.Text = "Noclip"
+    Title.TextColor3 = Color3.new(1, 1, 1)
+    Title.FontSize = Enum.FontSize.Size32
+    Title.TextSize = 30
+    Title.TextStrokeColor3 = Color3.new(0.180392, 0, 0.431373)
+    Title.TextStrokeTransparency = 0
+ 
+    Toggle.Parent = BG
+    Toggle.BackgroundColor3 = Color3.new(0.266667, 0.00392157, 0.627451)
+    Toggle.BorderColor3 = Color3.new(0.180392, 0, 0.431373)
+    Toggle.BorderSizePixel = 2
+    Toggle.Position = UDim2.new(0.152380958, 0, 0.374192119, 0)
+    Toggle.Size = UDim2.new(0, 146, 0, 36)
+    Toggle.Font = Enum.Font.Highway
+    Toggle.FontSize = Enum.FontSize.Size28
+    Toggle.Text = "Toggle"
+    Toggle.TextColor3 = Color3.new(1, 1, 1)
+    Toggle.TextSize = 25
+    Toggle.TextStrokeColor3 = Color3.new(0.180392, 0, 0.431373)
+    Toggle.TextStrokeTransparency = 0
+ 
+    StatusPF.Name = "StatusPF"
+    StatusPF.Parent = BG
+    StatusPF.BackgroundColor3 = Color3.new(1, 1, 1)
+    StatusPF.BackgroundTransparency = 1
+    StatusPF.Position = UDim2.new(0.314285725, 0, 0.708661377, 0)
+    StatusPF.Size = UDim2.new(0, 56, 0, 20)
+    StatusPF.Font = Enum.Font.Highway
+    StatusPF.FontSize = Enum.FontSize.Size24
+    StatusPF.Text = "Status:"
+    StatusPF.TextColor3 = Color3.new(1, 1, 1)
+    StatusPF.TextSize = 20
+    StatusPF.TextStrokeColor3 = Color3.new(0.333333, 0.333333, 0.333333)
+    StatusPF.TextStrokeTransparency = 0
+    StatusPF.TextWrapped = true
+ 
+    Status.Name = "Status"
+    Status.Parent = BG
+    Status.BackgroundColor3 = Color3.new(1, 1, 1)
+    Status.BackgroundTransparency = 1
+    Status.Position = UDim2.new(0.580952346, 0, 0.708661377, 0)
+    Status.Size = UDim2.new(0, 56, 0, 20)
+    Status.Font = Enum.Font.Highway
+    Status.FontSize = Enum.FontSize.Size14
+    Status.Text = "off"
+    Status.TextColor3 = Color3.new(0.666667, 0, 0)
+    Status.TextScaled = true
+    Status.TextSize = 14
+    Status.TextStrokeColor3 = Color3.new(0.180392, 0, 0.431373)
+    Status.TextWrapped = true
+    Status.TextXAlignment = Enum.TextXAlignment.Left
+ 
+    Credit.Name = "Credit"
+    Credit.Parent = BG
+    Credit.BackgroundColor3 = Color3.new(1, 1, 1)
+    Credit.BackgroundTransparency = 1
+    Credit.Position = UDim2.new(0.195238099, 0, 0.866141737, 0)
+    Credit.Size = UDim2.new(0, 128, 0, 17)
+    Credit.Font = Enum.Font.SourceSans
+    Credit.FontSize = Enum.FontSize.Size18
+    Credit.Text = "Created by 10_FO"
+    Credit.TextColor3 = Color3.new(1, 1, 1)
+    Credit.TextSize = 16
+    Credit.TextStrokeColor3 = Color3.new(0.196078, 0.196078, 0.196078)
+    Credit.TextStrokeTransparency = 0
+    Credit.TextWrapped = true
+ 
+    Toggle.MouseButton1Click:connect(function()
+        if Status.Text == "off" then
+            Clipon = true
+            Status.Text = "on"
+            Status.TextColor3 = Color3.new(0,185,0)
+            Stepped = game:GetService("RunService").Stepped:Connect(function()
+                if not Clipon == false then
+                    for a, b in pairs(Workspace:GetChildren()) do
+                    if b.Name == Plr.Name then
+                    for i, v in pairs(Workspace[Plr.Name]:GetChildren()) do
+                    if v:IsA("BasePart") then
+                    v.CanCollide = false
+                    end end end end
+                else
+                    Stepped:Disconnect()
+                end
+            end)
+        elseif Status.Text == "on" then
+            Clipon = false
+            Status.Text = "off"
+            Status.TextColor3 = Color3.new(170,0,0)
+        end
+    end)     
+end)
+ 
+PlayerSection:NewButton("AimLock", "Lock Onto Players", function()
+    pcall(function()
+        local espcolor = Color3.fromRGB(140, 69, 102)
+        local wallhack_esp_transparency = .4
+        local gui_hide_button = {Enum.KeyCode.LeftControl, "h"}
+        local plrs = game:GetService("Players")
+        local lplr = game:GetService("Players").LocalPlayer
+        local TeamBased = true ; local teambasedswitch = "o"
+        local presskeytoaim = true; local aimkey = "e"
+        aimbothider = false; aimbothiderspeed = .5
+        local Aim_Assist = false ; Aim_Assist_Key = {Enum.KeyCode.LeftControl, "z"}
+        local espupdatetime = 5; autoesp = false
+        local abs = math.abs
+        local mouselock = false
+        local canaimat = true
+        local lockaim = true; local lockangle = 5
+        local ver = "2"
+        local cam = game.Workspace.CurrentCamera
+        local BetterDeathCount = true
+ 
+ 
+        local mouse = lplr:GetMouse()
+        local switch = false
+        local key = "k"
+        local aimatpart = nil
+ 
+ 
+ 
+ 
+        local Gui = Instance.new("ScreenGui")
+        local Move = Instance.new("Frame")
+        local Main = Instance.new("Frame")
+        local EspStatus = Instance.new("TextLabel")
+        local st1 = Instance.new("TextLabel")
+        local st1_2 = Instance.new("TextLabel")
+        local st1_3 = Instance.new("TextLabel")
+        local Name = Instance.new("TextLabel")
+        --Properties:
+ 
+        Gui.Parent = plrs.LocalPlayer:WaitForChild("PlayerGui")
+ 
+ 
+ 
+        local gotstring = 0
+        local function getrandomstring()
+        gotstring = gotstring+666
+        local str = ""
+        local randomstring = {"a", "b", "c", "d", "e", "f", "g", "h", "i", "g", "k", "l", "m", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+        "?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?","?", "`", "$", 
+        "0","1","2","3","4","5","6","7","8","9", }
+        local counting123 = 0
+        for i, v in ipairs(randomstring) do
+        counting123 = i
+        end
+        do
+        math.randomseed(tick()+gotstring)
+        for i = 3, math.random(1,100) do
+        math.randomseed(i+tick()+gotstring)
+ 
+        local oneortwo = math.random(1,2)
+        if oneortwo == 2 then
+        math.randomseed(i+tick()+gotstring)
+        str = str..""..randomstring[math.random(1, counting123)]
+        else
+        math.randomseed(i+tick()+gotstring)
+        str = str..""..string.upper(randomstring[math.random(1, counting123)])
+        end
+ 
+        end
+        end
+        return str
+        end
+        local mousedown = false
+        local isonmovething = false
+        local mouseoffset = Vector2.new()
+        local mousedown = false
+ 
+ 
+ 
+ 
+        Gui.Name = getrandomstring()
+ 
+        Move.Name = getrandomstring()
+        Move.Draggable = true
+        Move.Parent = Gui
+        Move.BackgroundColor3 = Color3.new(0.0431373, 1, 0.0745098)
+        Move.BackgroundTransparency = 0.40000000596046
+        Move.BorderSizePixel = 0
+        Move.Position = UDim2.new(0.5, 0,0.018, 0)
+        Move.Size = UDim2.new(0.2, 0, 0.0320388414, 0)
+ 
+        Move.MouseEnter:Connect(function()
+ 
+        isonmovething = true
+ 
+        end)
+        Move.MouseLeave:Connect(function()
+ 
+        isonmovething = mousedown and true or false
+        end)
+        mouse.Button1Down:connect(function()
+        mousedown = true
+        mouseoffset = Move.AbsolutePosition - Vector2.new(mouse.X, mouse.Y)
+        end)
+        mouse.Button1Up:connect(function()
+        mousedown = false
+        end)
+ 
+        mouse.Move:Connect(function()
+        if isonmovething == true and mousedown then
+        Move.Position = UDim2.new(0, mouseoffset.X + mouse.X, 0, mouseoffset.Y + mouse.Y)
+        end
+        end)
+ 
+        Main.Name = getrandomstring()
+        Main.Parent = Move
+        Main.BackgroundColor3 = Color3.new(0.176471, 0.176471, 0.176471)
+        Main.BackgroundTransparency = 0.69999998807907
+        Main.Position = UDim2.new(0, 0, 0.995670795, 0)
+        Main.Size = UDim2.new(1.0000006, 0, 11.2, 0)
+ 
+        EspStatus.Name = getrandomstring()
+        EspStatus.Parent = Main
+        EspStatus.BackgroundColor3 = Color3.new(1, 1, 1)
+        EspStatus.BackgroundTransparency = 1
+        EspStatus.Size = UDim2.new(0.272955924, 0, 0.161862016, 0)
+        EspStatus.Font = Enum.Font.ArialBold
+        EspStatus.Text = "Press T to update Esp"
+        EspStatus.TextColor3 = Color3.new(0.0431373, 1, 0.0745098)
+        EspStatus.TextScaled = true
+        EspStatus.TextSize = 14
+        EspStatus.TextWrapped = true
+ 
+        st1.Name = getrandomstring()
+        st1.Parent = Main
+        st1.BackgroundColor3 = Color3.new(1, 1, 1)
+        st1.BackgroundTransparency = 1
+        st1.Position = UDim2.new(0.271787882, 0, 0, 0)
+        st1.Size = UDim2.new(0.728211343, 0, 0.161862016, 0)
+        st1.Font = Enum.Font.ArialBold
+        st1.Text = "Press "..aimkey.." to lock on a person inside ur view"
+        st1.TextColor3 = Color3.new(0.0431373, 1, 0.0745098)
+        st1.TextScaled = true
+        st1.TextSize = 14
+        st1.TextWrapped = true
+ 
+        st1_2.Name = getrandomstring()
+        st1_2.Parent = Main
+        st1_2.BackgroundColor3 = Color3.new(1, 1, 1)
+        st1_2.BackgroundTransparency = 1
+        st1_2.Position = UDim2.new(0, 0, 0.375590861, 0)
+        st1_2.Size = UDim2.new(0.999999881, 0, 0.161862016, 0)
+        st1_2.Font = Enum.Font.ArialBold
+        st1_2.Text = "Press L to enable esp loop. Press Y to disable/enable aimbot hider"
+        st1_2.TextColor3 = Color3.new(0.0431373, 1, 0.0745098)
+        st1_2.TextScaled = true
+        st1_2.TextSize = 14
+        st1_2.TextWrapped = true
+ 
+        local aimbothiderbox = Instance.new("TextBox")
+        aimbothiderbox.Name = getrandomstring()
+        aimbothiderbox.Text = "Speed :"..tostring(aimbothiderspeed).." off"
+        aimbothiderbox.Size = UDim2.new(1, 0,0.162, 0)
+        aimbothiderbox.TextScaled = true
+        aimbothiderbox.TextColor3 =Color3.fromRGB(255, 0, 0)
+        aimbothiderbox.Position = UDim2.new(0, 0,0.853, 0)
+        aimbothiderbox.BackgroundTransparency = 1
+        aimbothiderbox.Parent = Main
+ 
+        st1_3.Name = getrandomstring()
+        st1_3.Parent = Main
+        st1_3.BackgroundColor3 = Color3.new(1, 1, 1)
+        st1_3.BackgroundTransparency = 1
+        st1_3.Position = UDim2.new(0, 0, 0.18558608, 0)
+        st1_3.Size = UDim2.new(0.999999881, 0, 0.161862016, 0)
+        st1_3.Font = Enum.Font.ArialBold
+        st1_3.Text = "Press O to change team based mode"
+        st1_3.TextColor3 = Color3.new(0.0431373, 1, 0.0745098)
+        st1_3.TextScaled = true
+        st1_3.TextSize = 14
+        st1_3.TextWrapped = true
+        local teambasedstatus = st1_3:Clone()
+        teambasedstatus.Parent = Main
+        teambasedstatus.TextScaled = true
+        teambasedstatus.Position = UDim2.new(0, 0,.7, 0)
+        teambasedstatus.Size = UDim2.new(1, 0,.1, 0)
+        teambasedstatus.Name = getrandomstring()
+        teambasedstatus.Text = "Team Based: "..tostring(TeamBased)
+        local espstatustext = teambasedstatus:Clone()
+        espstatustext.Name = getrandomstring()
+        espstatustext.Position = UDim2.new(0, 0,0.58, 0)
+        espstatustext.Text = "Esp loop :"..tostring(autoesp)
+        espstatustext.Parent = Main
+        local hide = Instance.new("TextButton")
+        hide.Text = "_"
+        hide.BackgroundTransparency = 1
+        hide.TextScaled = true
+        hide.TextWrapped = true
+        hide.Size = UDim2.new(0.1, 0,1, 0)
+        hide.Position = UDim2.new(0.9, 0,-0.15, 0)
+        hide.Name = getrandomstring()
+        hide.Parent = Move
+        Name.Name = getrandomstring()
+        Name.Parent = Move
+        Name.BackgroundColor3 = Color3.new(1, 1, 1)
+        Name.BackgroundTransparency = 1
+        Name.Size = UDim2.new(0.838, 0, 1, 0)
+        Name.Font = Enum.Font.Arial
+        Name.Text = "FPS gui v"..ver
+        Name.TextColor3 = Color3.new(0, 0, 0)
+        Name.TextScaled = true
+        Name.TextSize = 14
+        Name.TextWrapped = true
+        Name.TextXAlignment = Enum.TextXAlignment.Left
+        local scr = Instance.new("ScrollingFrame")
+        scr.Size = Main.Size
+        scr.Position = Main.Position
+        scr.ScrollBarThickness = 0
+        scr.BackgroundTransparency = 1
+        scr.Name = getrandomstring()
+        Main.Size = UDim2.new(1, 0, 1, 0)
+        Main.Position = UDim2.new(0,0,0,0)
+        Main.Parent = scr
+        scr.Parent = Move
+        startpos = Main.Position
+        Move.Active = true
+ 
+        -- Scripts:
+        hided = false
+        hide.MouseButton1Click:Connect(function()
+        if hided == false then
+        hided = true
+        Main:TweenPosition(UDim2.new(0, 0, -1.5, 0))
+        else
+        hided = false
+        Main:TweenPosition(startpos)
+        end
+        end)
+ 
+ 
+        aimbothiderbox.FocusLost:Connect(function()
+        local numb = tonumber(aimbothiderbox.Text)
+        if aimbothider == true then
+        aimbothiderbox.TextColor3 =Color3.fromRGB(11, 255, 19)
+        else
+        aimbothiderbox.TextColor3 =Color3.fromRGB(255, 0, 0)
+        end
+        if numb ~= nil then
+        aimbothiderspeed = numb
+        if aimbothider == true then
+        aimbothiderbox.Text = "Speed :"..tostring(aimbothiderspeed).." on"
+        else
+        aimbothiderbox.Text = "Speed :"..tostring(aimbothiderspeed).." off"
+        end
+        else
+        if aimbothider == true then
+        aimbothiderbox.Text = "Speed :"..tostring(aimbothiderspeed).." on"
+        else
+        aimbothiderbox.Text = "Speed :"..tostring(aimbothiderspeed).." off"
+        end
+        end
+        end)
+ 
+ 
+        local plrsforaim = {}
+ 
+ 
+        Move.Draggable = true
+        Gui.ResetOnSpawn = false
+        --Gui.Name = "Chat"
+        Gui.DisplayOrder = 999
+        if not game:GetService("CoreGui") then
+        Gui.Parent = plrs.LocalPlayer.PlayerGui
+        else
+        Gui.Parent = game:GetService("CoreGui")
+        end
+ 
+ 
+ 
+ 
+ 
+        f = {}
+        local espforlder
+        local partconverter = Instance.new("Part")
+ 
+        f.addesp = function()
+        pcall(function()
+        --print("ESP ran")
+        if espforlder then
+        espforlder:Destroy()
+        espforlder = Instance.new("Folder")
+        espforlder.Parent = game.Workspace.CurrentCamera
+        else
+        espforlder = Instance.new("Folder")
+        espforlder.Parent = game.Workspace.CurrentCamera
+        end
+        for i, v in pairs(espforlder:GetChildren()) do
+        v:Destroy()
+        end
+        for _, plr in pairs(plrs:GetChildren()) do
+        if plr.Character and plr.Character.Humanoid.Health > 0 and plr.Name ~= lplr.Name then
+        if TeamBased == true then
+        if plr.Team.Name ~= plrs.LocalPlayer.Team.Name  then
+        local e = espforlder:FindFirstChild(plr.Name)
+        if not e then
+        local fold = Instance.new("Folder", espforlder)
+        fold.Name = plr.Name
+ 
+        --partconverter.BrickColor = plr.Team.Color
+        --local teamc = partconverter.Color
+        for i, p in pairs(plr.Character:GetChildren()) do
+        if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+        local urmom = Instance.new("BoxHandleAdornment")
+        urmom.ZIndex = 10
+        urmom.AlwaysOnTop = true
+        urmom.Color3 = espcolor
+        urmom.Size = p.Size
+        urmom.Adornee = p
+        urmom.Name = tick().." Ur mom has big gay"
+        urmom.Transparency = wallhack_esp_transparency
+        urmom.Parent = fold
+ 
+        end
+        end
+        plr.Character.Humanoid.Died:Connect(function()
+        fold:Destroy()
+        end)
+        end
+        end
+        else
+        local e = espforlder:FindFirstChild(plr.Name)
+        if not e then
+        local fold = Instance.new("Folder", espforlder)
+        fold.Name = plr.Name
+ 
+        --partconverter.BrickColor = plr.Team.Color
+        --local teamc = Move.BackgroundColor3
+        for i, p in pairs(plr.Character:GetChildren()) do
+        if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+        local urmom = Instance.new("BoxHandleAdornment")
+        urmom.ZIndex = 10
+        urmom.AlwaysOnTop = true
+        urmom.Color3 = espcolor
+        urmom.Size = p.Size
+        urmom.Adornee = p
+        urmom.Name = tick().." Ur mom has big gay"
+        urmom.Transparency = wallhack_esp_transparency
+        urmom.Parent = fold
+        end
+        end
+        plr.Character.Humanoid.Died:Connect(function()
+        fold:Destroy()
+        end)
+        end
+        end
+ 
+ 
+        end
+        end
+        end)
+        end
+        local uis = game:GetService("UserInputService")
+        local bringall = false
+        local hided2 = false
+        mouse.KeyDown:Connect(function(a)
+        if a == "t" then
+        --print("worked1")
+        f.addesp()
+        elseif a == gui_hide_button[2] and uis:IsKeyDown(gui_hide_button[1]) then
+        if hided2 == false then
+        hided2 = true
+        autoesp =false
+        if espforlder then
+        espforlder:Destroy()
+        end
+        Gui.Enabled = false
+        else
+        Gui.Enabled = true
+        hided2 = false
+        end
+        elseif a == "u" then
+        if mouselock == false then
+        mouselock = true
+        else
+        mouselock = false
+        end
+        elseif a == "y" then
+        if aimbothider == false then
+        aimbothider = true
+        if aimbothider == true then
+        aimbothiderbox.Text = "Speed :"..tostring(aimbothiderspeed).." on"
+        else
+        aimbothiderbox.Text = "Speed :"..tostring(aimbothiderspeed).." off"
+        end
+        else
+ 
+        aimbothider = false
+        if aimbothider == true then
+        aimbothiderbox.Text = "Speed :"..tostring(aimbothiderspeed).." on"
+        else
+        aimbothiderbox.Text = "Speed :"..tostring(aimbothiderspeed).." off"
+        end
+        end
+        if aimbothider == true then
+        aimbothiderbox.TextColor3 =Color3.fromRGB(11, 255, 19)
+        else
+        aimbothiderbox.TextColor3 =Color3.fromRGB(255, 0, 0)
+        end
+        elseif a == "l" then
+        if autoesp == false then
+        autoesp = true
+        else
+        autoesp = false
+        end
+        elseif a == Aim_Assist_Key[2] and uis:IsKeyDown(Aim_Assist_Key[1]) then
+        if Aim_Assist == true then
+        Aim_Assist = false
+        --print("disabled")
+        else
+        Aim_Assist = true
+        end
+        end
+        if a == "j" then
+        if mouse.Target then
+        mouse.Target:Destroy()
+        end
+        end
+        if a == key then
+        if switch == false then
+        switch = true
+        else
+        switch = false
+        if aimatpart ~= nil then
+        aimatpart = nil
+        end
+        end
+        elseif a == teambasedswitch then
+        if TeamBased == true then
+        TeamBased = false
+        teambasedstatus.Text = "Team Based: "..tostring(TeamBased)
+        else
+        TeamBased = true
+        teambasedstatus.Text = "Team Based: "..tostring(TeamBased)
+        end
+        elseif a == aimkey then
+        if not aimatpart then
+        local maxangle = math.rad(20)
+        for i, plr in pairs(plrs:GetChildren()) do
+        if plr.Name ~= lplr.Name and plr.Character and plr.Character.Head and plr.Character.Humanoid and plr.Character.Humanoid.Health > 1 then
+        if TeamBased == true then
+        if plr.Team.Name ~= lplr.Team.Name then
+        local an = checkfov(plr.Character.Head)
+        if an < maxangle then
+        maxangle = an
+        aimatpart = plr.Character.Head
+        end
+        end
+        else
+        local an = checkfov(plr.Character.Head)
+        if an < maxangle then
+        maxangle = an
+        aimatpart = plr.Character.Head
+        end
+        --print(plr)
+        end
+        local old = aimatpart
+        plr.Character.Humanoid.Died:Connect(function()
+        --print("died")
+        if aimatpart and aimatpart == old then
+        aimatpart = nil
+        end
+        end)
+ 
+        end
+        end
+        else
+        aimatpart = nil
+        canaimat = false
+        delay(1.1, function()
+        canaimat = true
+        end)
+        end
+        end
+        end)
+ 
+        function getfovxyz (p0, p1, deg)
+        local x1, y1, z1 = p0:ToOrientation()
+        local cf = CFrame.new(p0.p, p1.p)
+        local x2, y2, z2 = cf:ToOrientation()
+        local d = math.deg
+        if deg then
+        return Vector3.new(d(x1-x2), d(y1-y2), d(z1-z2))
+        else
+        return Vector3.new((x1-x2), (y1-y2), (z1-z2))
+        end
+        end
+ 
+ 
+        function aimat(part)
+        if part then
+        if aimbothider == true or Aim_Assist == true then
+        cam.CFrame = cam.CFrame:Lerp(CFrame.new(cam.CFrame.p, part.CFrame.p), aimbothiderspeed)
+        else
+ 
+        cam.CFrame = CFrame.new(cam.CFrame.p, part.CFrame.p)
+        end
+        end
+        end
+        function checkfov (part)
+        local fov = getfovxyz(game.Workspace.CurrentCamera.CFrame, part.CFrame)
+        local angle = math.abs(fov.X) + math.abs(fov.Y)
+        return angle
+        end
+        pcall(function()
+        delay(0, function()
+        while wait(.4) do
+        if Aim_Assist and not aimatpart and canaimat and lplr.Character and lplr.Character.Humanoid and lplr.Character.Humanoid.Health > 0 then
+        for i, plr in pairs(plrs:GetChildren()) do
+ 
+ 
+        local minangle = math.rad(5.5)
+        local lastpart = nil
+        local function gg(plr)
+        pcall(function()
+        if plr.Name ~= lplr.Name and plr.Character and plr.Character.Humanoid and plr.Character.Humanoid.Health > 0 and plr.Character.Head then
+        local raycasted = false
+        local cf1 = CFrame.new(cam.CFrame.p, plr.Character.Head.CFrame.p) * CFrame.new(0, 0, -4)
+        local r1 = Ray.new(cf1.p, cf1.LookVector * 9000)
+        local obj, pos = game.Workspace:FindPartOnRayWithIgnoreList(r1,  {lplr.Character.Head})
+        local dist = (plr.Character.Head.CFrame.p- pos).magnitude
+        if dist < 4 then
+        raycasted = true
+        end
+        if raycasted == true then
+        local an1 = getfovxyz(cam.CFrame, plr.Character.Head.CFrame)
+        local an = abs(an1.X) + abs(an1.Y)
+        if an < minangle then
+        minangle = an
+        lastpart = plr.Character.Head
+        end
+        end
+        end
+        end)
+        end
+        if TeamBased then
+        if plr.Team.Name ~= lplr.Team.Name then
+        gg(plr)
+        end
+        else
+        gg(plr)
+        end
+        --print(math.deg(minangle))
+        if lastpart then
+        aimatpart = lastpart
+        aimatpart.Parent.Humanoid.Died:Connect(function()
+        if aimatpart == lastpart then
+        aimatpart = nil
+        end
+        end)
+ 
+        end
+        end
+        end
+        end
+        end)
+        end)
+        local oldheadpos
+        local lastaimapart
+        game:GetService("RunService").RenderStepped:Connect(function()
+        espstatustext.Text = "Esp loop :"..tostring(autoesp)
+        if aimatpart and lplr.Character and lplr.Character.Head then
+        if BetterDeathCount and lastaimapart and lastaimapart == aimatpart then
+        local dist = (oldheadpos - aimatpart.CFrame.p).magnitude
+        if dist > 40 then
+        aimatpart = nil
+        end
+        end
+        lastaimapart = aimatpart
+        oldheadpos = lastaimapart.CFrame.p
+        do 
+        if aimatpart.Parent == plrs.LocalPlayer.Character then
+        aimatpart = nil
+        end
+        aimat(aimatpart)
+        pcall(function()
+        if Aim_Assist == true then
+        local cf1 = CFrame.new(cam.CFrame.p, aimatpart.CFrame.p) * CFrame.new(0, 0, -4)
+        local r1 = Ray.new(cf1.p, cf1.LookVector * 1000)
+        local obj, pos = game.Workspace:FindPartOnRayWithIgnoreList(r1,  {lplr.Character.Head})
+        local dist = (aimatpart.CFrame.p- pos).magnitude
+        if obj then
+        --print(obj:GetFullName())
+        end
+        if not obj or dist > 6 then
+        aimatpart = nil
+        --print("ooof")
+        end
+        canaimat = false
+        delay(.5, function()
+        canaimat = true
+        end)
+        end
+        end)
+        end
+ 
+ 
+ 
+        end
+        end)
+        delay(0, function()
+        while wait(espupdatetime) do
+        if autoesp == true then
+        pcall(function()
+        f.addesp()
+        end)
+        end
+        end
+        end)
+        --warn("loaded")
+        end)
+end)
